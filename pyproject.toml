@@ -1,0 +1,13 @@
+[project]
+name = "geomanji"
+version = "0.1.0"
+description = "GeoManji Dependancies"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "geoclip>=1.2.1",
+    "loguru>=0.7.3",
+    "pydantic>=2.13.5",
+    "torch>=2.14.0",
+]
