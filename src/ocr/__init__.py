@@ -2,6 +2,7 @@ from .gemini import GeminiAnalyzer
 from .models import (
     GeminiAnalysis,
     LanguageInfo,
+    LocationPrediction,
     OCRClue,
     OCRDetection,
     OCRResult,
@@ -12,6 +13,7 @@ __all__ = [
     "GeminiAnalyzer",
     "GeminiAnalysis",
     "LanguageInfo",
+    "LocationPrediction",
     "OCRPipeline",
     "OCRClue",
     "OCRDetection",

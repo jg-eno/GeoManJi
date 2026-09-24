@@ -50,6 +50,19 @@ class GeminiAnalysis(BaseModel):
     error: str | None = None
 
 
+class LocationPrediction(BaseModel):
+    latitude: float = Field(description="Predicted latitude from GeoCLIP")
+    longitude: float = Field(description="Predicted longitude from GeoCLIP")
+    probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    language: str | None = Field(default=None, description="Detected language name")
+    language_code: str | None = Field(default=None, description="Detected ISO language code")
+    place_name: str | None = Field(default=None, description="Detected place/area name from the image text")
+    place_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence: str | None = Field(default=None, description="OCR text supporting the location")
+    ocr_text: str | None = Field(default=None, description="Full detected text used for the prediction")
+    clues: list[OCRClue] = Field(default_factory=list)
+
+
 class OCRResult(BaseModel):
     text: str = ""
     detections: list[OCRDetection] = Field(default_factory=list)

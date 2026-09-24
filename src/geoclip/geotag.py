@@ -2,6 +2,7 @@ from geoclip import GeoCLIP
 from loguru import logger
 
 from src.ocr import OCRPipeline
+from src.ocr.models import LocationPrediction, OCRResult
 
 
 class GeoTag:
@@ -22,6 +23,7 @@ class GeoTag:
     def predict_with_evidence(self, img) -> dict:
         location = self.predict(img)
         ocr_result = self.ocr.extract(img)
+        prediction = self._location_prediction(ocr_result, location)
         ocr_payload = ocr_result.model_dump(mode="json")
         return {
             **location,
@@ -37,8 +39,56 @@ class GeoTag:
                 "summary": ocr_payload["summary"],
             },
             "evidence": [clue.model_dump(mode="json") for clue in ocr_result.clues],
+            "location_prediction": prediction.model_dump(mode="json", exclude_none=True),
             "map": {
                 "latitude": location["Latitude"],
                 "longitude": location["Longitude"],
             },
         }
+
+    @staticmethod
+    def _location_prediction(
+        ocr_result: OCRResult, location: dict
+    ) -> LocationPrediction:
+        primary = ocr_result.primary_language
+        place_name = ocr_result.area_guess
+        place_confidence = ocr_result.area_confidence
+        evidence = ocr_result.area_evidence
+
+        if place_name is None:
+            place_clues = [
+                clue for clue in ocr_result.clues if clue.type in _CLUE_PRIORITY_TYPES
+            ]
+            if place_clues:
+                best = max(
+                    place_clues,
+                    key=lambda clue: clue.confidence or 0.0,
+                )
+                place_name = best.value
+                place_confidence = best.confidence
+                evidence = evidence or best.evidence
+
+        return LocationPrediction(
+            latitude=location["Latitude"],
+            longitude=location["Longitude"],
+            probability=location.get("Probability"),
+            language=primary.name if primary else None,
+            language_code=primary.code if primary else None,
+            place_name=place_name,
+            place_confidence=place_confidence,
+            evidence=evidence,
+            ocr_text=ocr_result.text,
+            clues=[clue.model_copy() for clue in ocr_result.clues],
+        )
+
+
+_CLUE_PRIORITY_TYPES = {
+    "place",
+    "area",
+    "postal",
+    "road",
+    "landmark",
+    "business",
+    "transport",
+    "sign",
+}

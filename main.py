@@ -5,6 +5,7 @@ from fastapi import FastAPI, File, UploadFile
 
 from src.geoclip.geotag import GeoTag
 
+
 app = FastAPI()
 gt = GeoTag()
 

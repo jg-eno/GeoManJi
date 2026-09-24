@@ -5,7 +5,6 @@ description = "GeoManji Dependancies"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "easyocr==1.7.2",
     "fastapi[standard]>=0.141.1",
     "geoclip>=1.2.1",
     "google-genai>=1.0.0",
