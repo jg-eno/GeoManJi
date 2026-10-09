@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GeoManJi · India visual matches</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #07130f; color: #f4f7f5; }
+    main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; min-height: 100vh; }
+    aside { padding: 28px; background: linear-gradient(160deg, #102a21, #07130f); overflow: auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -.04em; }
+    .lede { margin: 0 0 24px; color: #afc8bd; line-height: 1.5; }
+    form { display: grid; gap: 12px; }
+    input[type=file] { width: 100%; padding: 14px; border: 1px dashed #477261; border-radius: 12px; background: #0d211a; }
+    button { padding: 13px 16px; border: 0; border-radius: 10px; color: #062016; background: #57e39c; font-weight: 750; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 24px; margin: 18px 0 8px; color: #b8d5c9; font-size: 14px; }
+    #results { display: grid; gap: 14px; }
+    .component { padding: 14px; border: 1px solid #214438; border-radius: 14px; background: #091a14; }
+    .component h2 { margin: 0 0 9px; font-size: 16px; color: #7ff0b6; }
+    .component p { margin: 5px 0; color: #d9e7e1; line-height: 1.4; overflow-wrap: anywhere; }
+    .component .muted { color: #93b2a5; font-size: 13px; }
+    .component .error { color: #ffba9d; }
+    .component-list { display: grid; gap: 7px; margin-top: 10px; }
+    .ocr-text { max-height: 130px; overflow: auto; padding: 9px; border-radius: 8px; background: #06110d; white-space: pre-wrap; font: 12px/1.45 ui-monospace, monospace; }
+    .place { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid #214438; border-radius: 12px; background: #0c1d17; }
+    .rank, .pin { display: grid; place-items: center; border-radius: 50%; background: #57e39c; color: #062016; font-weight: 800; }
+    .rank { width: 30px; height: 30px; }
+    .place strong { display: block; }
+    .place small { color: #93b2a5; }
+    .place a { color: #7ff0b6; text-decoration: none; }
+    #map { min-height: 100vh; }
+    .pin { width: 34px; height: 34px; border: 3px solid white; box-shadow: 0 3px 12px #0008; }
+    .pin-geoclip { background: #ffd166; color: #271c00; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #102a21; color: #f4f7f5; }
+    @media (max-width: 760px) { main { grid-template-columns: 1fr; } #map { min-height: 62vh; } }
+  </style>
+</head>
+<body>
+<main>
+  <aside>
+    <h1>India visual matches</h1>
+    <p class="lede">Upload one photograph to see the separate Gemini OCR, GeoCLIP, and PLONK results.</p>
+    <form id="upload-form">
+      <input id="image" name="img" type="file" accept="image/png,image/jpeg,image/webp" required>
+      <button id="submit" type="submit">Find five places</button>
+    </form>
+    <div id="status">Ready.</div>
+    <section id="results" aria-live="polite"></section>
+  </aside>
+  <div id="map" aria-label="OpenStreetMap with prediction pins"></div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map', { zoomControl: true }).setView([22.8, 79.6], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  const pins = L.layerGroup().addTo(map);
+  const form = document.querySelector('#upload-form');
+  const submit = document.querySelector('#submit');
+  const status = document.querySelector('#status');
+  const results = document.querySelector('#results');
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+  }
+
+  function formatPercent(value) {
+    return Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : 'Unavailable';
+  }
+
+  function renderGeoCLIP(payload, bounds) {
+    const latitude = Number(payload.Latitude);
+    const longitude = Number(payload.Longitude);
+    const validCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+    const card = document.createElement('section');
+    card.className = 'component';
+    card.innerHTML = `<h2>1. GeoCLIP coordinate</h2>${validCoordinates
+      ? `<p><strong>${latitude.toFixed(6)}, ${longitude.toFixed(6)}</strong></p><p class="muted">Model probability: ${formatPercent(payload.Probability)}</p>`
+      : '<p class="error">No GeoCLIP coordinate was returned.</p>'}`;
+    results.appendChild(card);
+    if (validCoordinates) {
+      const coords = [latitude, longitude];
+      bounds.push(coords);
+      const icon = L.divIcon({ className: '', html: '<div class="pin pin-geoclip">G</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+      L.marker(coords, { icon }).bindPopup(`<strong>GeoCLIP prediction</strong><br>${latitude.toFixed(5)}, ${longitude.toFixed(5)}<br>Probability: ${formatPercent(payload.Probability)}`).addTo(pins);
+    }
+  }
+
+  function renderGemini(payload) {
+    const ocr = payload.ocr || {};
+    const analysis = payload.analysis || {};
+    const languages = Array.isArray(ocr.languages) ? ocr.languages : [];
+    const clues = Array.isArray(payload.evidence) ? payload.evidence : [];
+    const languageText = languages.length
+      ? languages.map(language => `${language.name}${language.script ? ` (${language.script})` : ''}`).join(', ')
+      : 'None detected';
+    const clueHtml = clues.length
+      ? `<div class="component-list">${clues.map(clue => `<p class="muted"><strong>${escapeHtml(clue.label || clue.type)}:</strong> ${escapeHtml(clue.value)}${clue.evidence ? `<br>Evidence: ${escapeHtml(clue.evidence)}` : ''}</p>`).join('')}</div>`
+      : '<p class="muted">No location clues returned.</p>';
+    const card = document.createElement('section');
+    card.className = 'component';
+    card.innerHTML = `<h2>2. Gemini OCR and evidence</h2>
+      <p><strong>Source:</strong> ${escapeHtml(analysis.source || 'Unavailable')}</p>
+      ${analysis.error ? `<p class="error">${escapeHtml(analysis.error)}</p>` : ''}
+      <p><strong>Languages:</strong> ${escapeHtml(languageText)}</p>
+      <p><strong>Area guess:</strong> ${escapeHtml(payload.area_guess || 'None')}</p>
+      ${payload.area_evidence ? `<p class="muted">Evidence: ${escapeHtml(payload.area_evidence)}</p>` : ''}
+      <div class="ocr-text">${escapeHtml(ocr.text || 'No OCR text returned.')}</div>
+      ${clueHtml}`;
+    results.appendChild(card);
+  }
+
+  function renderPLONK(payload, bounds) {
+    const places = Array.isArray(payload.similar_places) ? payload.similar_places : [];
+    const plonk = payload.plonk || {};
+    const section = document.createElement('section');
+    section.className = 'component';
+    section.innerHTML = `<h2>3. PLONK India candidates</h2>
+      <p><strong>${Number(plonk.india_samples || 0)}</strong> of <strong>${Number(plonk.generated_samples || 0)}</strong> generated samples retained in India (${formatPercent(plonk.india_sample_share)}).</p>
+      <p class="muted">Model: ${escapeHtml(plonk.model || 'Unavailable')}</p>
+      ${plonk.error ? `<p class="error">${escapeHtml(plonk.error)}</p>` : ''}`;
+    const list = document.createElement('div');
+    list.className = 'component-list';
+    places.forEach(place => {
+      const coords = [place.latitude, place.longitude];
+      bounds.push(coords);
+      const icon = L.divIcon({ className: '', html: `<div class="pin">${place.rank}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+      L.marker(coords, { icon }).bindPopup(`<strong>${escapeHtml(place.name)}</strong><br>${place.latitude.toFixed(5)}, ${place.longitude.toFixed(5)}<br>${(place.sample_share * 100).toFixed(1)}% of India samples<br>${escapeHtml(place.ranking_reason)}`).addTo(pins);
+      const card = document.createElement('article');
+      card.className = 'place';
+      card.innerHTML = `<span class="rank">${place.rank}</span><div><strong>${escapeHtml(place.name)}${place.evidence_match ? ' · OCR match' : ''}</strong><small>${escapeHtml(place.display_name || `${place.latitude.toFixed(4)}, ${place.longitude.toFixed(4)}`)}</small></div><a href="${place.map_url}" target="_blank" rel="noreferrer">OSM ↗</a>`;
+      card.addEventListener('click', event => { if (event.target.tagName !== 'A') map.flyTo(coords, 11); });
+      list.appendChild(card);
+    });
+    if (!places.length) list.innerHTML = '<p class="muted">No India candidates returned.</p>';
+    section.appendChild(list);
+    results.appendChild(section);
+  }
+
+  function renderResults(payload) {
+    pins.clearLayers();
+    results.innerHTML = '';
+    const bounds = [];
+    renderGeoCLIP(payload, bounds);
+    renderGemini(payload);
+    renderPLONK(payload, bounds);
+    if (bounds.length) map.fitBounds(bounds, { padding: [45, 45], maxZoom: 10 });
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    status.textContent = 'Running GeoCLIP, Gemini OCR, and PLONK. First use downloads model weights and can take several minutes…';
+    results.innerHTML = '';
+    try {
+      const response = await fetch('/image', { method: 'POST', body: new FormData(form) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `Request failed (${response.status})`);
+      const places = payload.similar_places || [];
+      renderResults(payload);
+      status.textContent = places.length
+        ? `${places.length} India-only matches from ${payload.plonk.india_samples} of ${payload.plonk.generated_samples} PLONK samples.`
+        : `No India matches: ${payload.plonk.error || 'the model produced no samples inside the filter.'}`;
+    } catch (error) {
+      status.textContent = `Unable to complete inference: ${error.message}`;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

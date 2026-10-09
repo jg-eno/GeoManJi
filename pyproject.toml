@@ -5,6 +5,7 @@ description = "GeoManji Dependancies"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "diff-plonk==0.4",
     "fastapi[standard]>=0.141.1",
     "geoclip>=1.2.1",
     "google-genai>=1.0.0",
@@ -13,6 +14,14 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "torch>=2.14.0",
 ]
+
+[tool.uv]
+# diff-plonk 0.4 pins scipy 1.13.1, which has no Python 3.13 wheel. PLONK uses
+# stable scipy APIs, so use the supported scipy release already available here.
+override-dependencies = ["scipy>=1.16.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [

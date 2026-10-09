@@ -1,14 +1,20 @@
-from geoclip import GeoCLIP
 from loguru import logger
 
+from geoclip import GeoCLIP
 from src.ocr import OCRPipeline
 from src.ocr.models import LocationPrediction, OCRResult
+from src.plonk_india import PlonkIndiaService
 
 
 class GeoTag:
-    def __init__(self, ocr_pipeline: OCRPipeline | None = None):
+    def __init__(
+        self,
+        ocr_pipeline: OCRPipeline | None = None,
+        plonk_service: PlonkIndiaService | None = None,
+    ):
         self.model = GeoCLIP()
         self.ocr = ocr_pipeline or OCRPipeline()
+        self.plonk = plonk_service or PlonkIndiaService()
 
     def predict(self, img):
         top_pred_gps, top_pred_prob = self.model.predict(img, top_k=1)
@@ -23,8 +29,23 @@ class GeoTag:
     def predict_with_evidence(self, img) -> dict:
         location = self.predict(img)
         ocr_result = self.ocr.extract(img)
+        evidence_terms = [
+            value
+            for value in (
+                ocr_result.text,
+                ocr_result.area_guess,
+                *(clue.value for clue in ocr_result.clues),
+            )
+            if value
+        ]
+        plonk_result = self.plonk.predict(
+            img,
+            top_k=5,
+            evidence_terms=evidence_terms,
+        )
         prediction = self._location_prediction(ocr_result, location)
         ocr_payload = ocr_result.model_dump(mode="json")
+        plonk_payload = plonk_result.model_dump(mode="json")
         return {
             **location,
             "ocr": ocr_payload,
@@ -39,10 +60,18 @@ class GeoTag:
                 "summary": ocr_payload["summary"],
             },
             "evidence": [clue.model_dump(mode="json") for clue in ocr_result.clues],
-            "location_prediction": prediction.model_dump(mode="json", exclude_none=True),
+            "location_prediction": prediction.model_dump(
+                mode="json", exclude_none=True
+            ),
+            "similar_places": plonk_payload["locations"],
+            "plonk": {
+                key: value for key, value in plonk_payload.items() if key != "locations"
+            },
             "map": {
+                "provider": "OpenStreetMap",
                 "latitude": location["Latitude"],
                 "longitude": location["Longitude"],
+                "locations": plonk_payload["locations"],
             },
         }
 
