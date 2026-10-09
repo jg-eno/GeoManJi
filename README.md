@@ -1,9 +1,30 @@
 # GeoManJi
 
-FastAPI image-geolocation prototype combining GeoCLIP, Gemini OCR, and
-[PLONK](https://github.com/nicolas-dufour/plonk). PLONK's stochastic predictions
-are filtered to India, grouped into five location modes, named through
-OpenStreetMap Nominatim, and displayed as numbered map pins.
+FastAPI image-geolocation prototype for India. A photo goes through a classical
+OpenCV stage, Gemini OCR, GeoCLIP and
+[PLONK](https://github.com/nicolas-dufour/plonk); Gemini then fuses every
+stage's output into up to three final place predictions, shown on a map with
+routing from your current location.
+
+## Project structure
+
+```text
+main.py                  FastAPI routes: /, /maps, POST /image
+src/pipeline.py          Orchestrator: runs the stages (in parallel) and builds the response
+src/cv.py                OpenCV stage: preprocessing, morphology, text regions, plates, OCR crops
+src/gemini.py            Gemini client: OCR on photo + crops, and the final fusion step
+src/plonk_india/         PLONK sampling, India mask, clustering, Nominatim place names
+src/web/map.html         Single-page UI (upload, pipeline view, map, routing)
+src/sample_data/         Example photos
+```
+
+```text
+GeoCLIP  ──────────────────┐
+PLONK India ───────────────┤  run in parallel
+OpenCV ──► Gemini OCR ─────┘
+             │
+evidence matching ──► Gemini fusion ──► final places
+```
 
 ## Installation
 
@@ -31,8 +52,6 @@ Open the interactive upload/map interface at:
 http://127.0.0.1:8000/maps
 ```
 
-`/map` remains available as an alias.
-
 Health check:
 
 ```bash
@@ -41,18 +60,24 @@ curl http://127.0.0.1:8000/
 
 ## Run inference
 
-Send an image using the `img` form field. `/image` is the primary upload route;
-`/geolocate` remains available as a backward-compatible alias:
+Send an image using the `img` form field:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/image \
   -F "img=@src/sample_data/img2.png"
 ```
 
-The response contains the GeoCLIP coordinate, OCR evidence, detected languages,
-Gemini-derived area clues, and up to five India-only PLONK matches in
-`similar_places`. The same matches are repeated under `map.locations` for map
-clients.
+The response has one key per stage:
+
+| Key | Contents |
+|---|---|
+| `final` | Up to three ranked places from the Gemini fusion step, with confidence, reasoning and supporting sources |
+| `geoclip` | GeoCLIP's coordinate and probability |
+| `plonk` | Up to five India-only PLONK candidates (`places`) and sample counts |
+| `ocr` | Text, languages, location clues and area guess read by Gemini |
+| `cv` | OpenCV results, stage images and the crops sent to OCR |
+
+Any stage that fails reports an `error` field; the other stages still run.
 
 PLONK downloads the `nicolas-dufour/PLONK_OSV_5M` checkpoint on first use, so the
 first request can take several minutes and needs network access. A CUDA GPU is
@@ -68,13 +93,34 @@ GEMINI_API_KEY="your-key"
 
 The application loads `.env` automatically. Do not commit the key.
 
-The OCR engine defaults to English and Kannada. Set `OCR_LANGUAGES` to a comma-separated list of EasyOCR language codes for the signs you expect:
+Gemini reads the text in the image and extracts languages and location clues.
+If Gemini is unavailable, the OCR fields are empty and the reason is reported in
+`analysis.error`; GeoCLIP, PLONK and the OpenCV pipeline still run.
 
-```bash
-export OCR_LANGUAGES="en,hi,kn,ta,te,ml,ar"
-```
+## Classical CV pipeline
 
-If Gemini is unavailable or no text is recognized, the pipeline falls back to Unicode script detection. Gemini failures are reported in `analysis.error` without preventing OCR or GeoCLIP inference.
+`src/cv/classic.py` runs OpenCV on every upload, before OCR:
+
+1. Preprocessing: resize to 800px wide, grayscale, CLAHE, Gaussian blur, and a
+   Laplacian-variance blur check.
+2. Morphology: black-hat/top-hat (dark and light text), Otsu threshold, opening
+   to remove noise, closing to merge letters into words and blocks.
+3. Detection: contours, a connected-component letter check (regions need five
+   or more letter-sized blobs of similar height), non-maximum suppression, and a
+   Haar-cascade number-plate detector.
+4. Hand-off: text regions and plates are cropped from the full-resolution photo
+   and sent to Gemini with the photo, so small or distant text is easier to read.
+
+Each stage image is returned under `cv.stages` and shown on `/maps`.
+
+## Final prediction
+
+After every other stage has run, Gemini receives the photo plus a summary of
+the CV results, OCR text and clues, the GeoCLIP coordinate and the PLONK
+candidates, and returns up to three ranked places under `final.places`. Each
+place has coordinates, a confidence, a short reasoning and the stages that
+support it. If Gemini is unavailable, `final.error` explains why and the other
+outputs are still returned.
 
 ## PLONK India settings
 
@@ -101,7 +147,7 @@ is unavailable. Set `NOMINATIM_ENABLED=false` to skip reverse geocoding.
 ## Tests
 
 ```bash
-uv run python -m unittest discover -s tests -v
+uv run python -m src.cv
 ```
 
 The current GeoCLIP inference takes approximately 2–3 minutes per query.

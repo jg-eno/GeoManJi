@@ -3,175 +3,505 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GeoManJi · India visual matches</title>
-  <link rel="preconnect" href="https://unpkg.com">
+  <title>GeoManJi</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    :root {
+      --bg: #fff; --fg: #0a0a0a; --muted: #737373; --line: #e5e5e5; --soft: #f5f5f5; --panel: #fff;
+      --text-box: #00c800; --plate-box: #ff0000;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #000; --fg: #fafafa; --muted: #8a8a8a; --line: #222; --soft: #111; --panel: #0a0a0a; color-scheme: dark; }
+      .leaflet-tile-pane { filter: grayscale(1) invert(1) contrast(.85) !important; }
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #07130f; color: #f4f7f5; }
-    main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; min-height: 100vh; }
-    aside { padding: 28px; background: linear-gradient(160deg, #102a21, #07130f); overflow: auto; }
-    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -.04em; }
-    .lede { margin: 0 0 24px; color: #afc8bd; line-height: 1.5; }
-    form { display: grid; gap: 12px; }
-    input[type=file] { width: 100%; padding: 14px; border: 1px dashed #477261; border-radius: 12px; background: #0d211a; }
-    button { padding: 13px 16px; border: 0; border-radius: 10px; color: #062016; background: #57e39c; font-weight: 750; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    #status { min-height: 24px; margin: 18px 0 8px; color: #b8d5c9; font-size: 14px; }
-    #results { display: grid; gap: 14px; }
-    .component { padding: 14px; border: 1px solid #214438; border-radius: 14px; background: #091a14; }
-    .component h2 { margin: 0 0 9px; font-size: 16px; color: #7ff0b6; }
-    .component p { margin: 5px 0; color: #d9e7e1; line-height: 1.4; overflow-wrap: anywhere; }
-    .component .muted { color: #93b2a5; font-size: 13px; }
-    .component .error { color: #ffba9d; }
-    .component-list { display: grid; gap: 7px; margin-top: 10px; }
-    .ocr-text { max-height: 130px; overflow: auto; padding: 9px; border-radius: 8px; background: #06110d; white-space: pre-wrap; font: 12px/1.45 ui-monospace, monospace; }
-    .place { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid #214438; border-radius: 12px; background: #0c1d17; }
-    .rank, .pin { display: grid; place-items: center; border-radius: 50%; background: #57e39c; color: #062016; font-weight: 800; }
-    .rank { width: 30px; height: 30px; }
-    .place strong { display: block; }
-    .place small { color: #93b2a5; }
-    .place a { color: #7ff0b6; text-decoration: none; }
-    #map { min-height: 100vh; }
-    .pin { width: 34px; height: 34px; border: 3px solid white; box-shadow: 0 3px 12px #0008; }
-    .pin-geoclip { background: #ffd166; color: #271c00; }
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #102a21; color: #f4f7f5; }
-    @media (max-width: 760px) { main { grid-template-columns: 1fr; } #map { min-height: 62vh; } }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.5; }
+    h1, h2, h3, p { margin: 0; }
+    [hidden] { display: none !important; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+    /* Header */
+    header { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; gap: 16px;
+             padding: 14px 32px; background: var(--bg); border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; white-space: nowrap; }
+    .brand h1 { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+    #status { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+    .btn { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border: 1px solid var(--fg);
+           background: var(--fg); color: var(--bg); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn.ghost { background: transparent; color: var(--fg); }
+    .btn:hover:not(:disabled) { opacity: .8; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    main { max-width: 1320px; margin: 0 auto; padding: 28px 32px 64px; }
+
+    /* Empty state */
+    .drop { display: grid; place-items: center; gap: 6px; min-height: 60vh; border: 1px dashed var(--line);
+            text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .drop:hover, .drop.over { border-color: var(--fg); background: var(--soft); }
+    .drop strong { font-size: 18px; font-weight: 600; }
+
+    /* Layout */
+    #app { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .row { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; }
+    .panel { border: 1px solid var(--line); background: var(--panel); min-width: 0; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                  padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    .panel-head .muted { font-size: 12px; }
+    .panel-body { padding: 16px; }
+    .placeholder { padding: 28px 16px; color: var(--muted); text-align: center; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); }
+    .stat { padding: 14px 16px; border-right: 1px solid var(--line); min-width: 0; }
+    .stat:last-child { border-right: 0; }
+    .stat .label { font-size: 12px; color: var(--muted); }
+    .stat .value { margin-top: 2px; font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat .note { font-size: 12px; color: var(--muted); }
+
+    /* Image viewer */
+    .seg { display: inline-flex; border: 1px solid var(--line); }
+    .seg button { height: 28px; padding: 0 12px; border: 0; background: none; color: var(--muted); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .seg button[aria-selected=true] { background: var(--fg); color: var(--bg); }
+    .seg button:disabled { cursor: not-allowed; opacity: .4; }
+    .viewer { display: grid; place-items: center; background: var(--soft); aspect-ratio: 4 / 3; }
+    .viewer img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .legend { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid; vertical-align: -1px; }
+
+    /* Map + places */
+    #map { height: 300px; border-bottom: 1px solid var(--line); }
+    .places { margin: 0; padding: 0; list-style: none; }
+    .places li { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .places li:last-child { border-bottom: 0; }
+    .places li:hover { background: var(--soft); }
+    .rank { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--fg); font-size: 11px; font-weight: 600; }
+    .places .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar { flex: none; width: 80px; height: 4px; background: var(--line); }
+    .bar i { display: block; height: 100%; background: var(--fg); }
+    .share { flex: none; width: 44px; text-align: right; font-size: 12px; }
+    .tag { flex: none; padding: 1px 6px; border: 1px solid var(--fg); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .route-btn { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--fg); background: none; color: var(--fg);
+                 font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .route-btn:hover { background: var(--fg); color: var(--bg); }
+    .route { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .route > :first-child { margin-right: auto; }
+    .route a, .route button { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+
+    /* Pipeline */
+    .group { padding: 16px; border-bottom: 1px solid var(--line); }
+    .group:last-child { border-bottom: 0; }
+    .group h3 { margin-bottom: 12px; font-size: 13px; font-weight: 600; }
+    .group h3 span { margin-left: 8px; font-weight: 400; color: var(--muted); }
+    .steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .step { display: flex; flex-direction: column; width: 100%; padding: 0; border: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: zoom-in; }
+    .step:hover { border-color: var(--fg); }
+    .step .thumb { display: grid; place-items: center; aspect-ratio: 4 / 3; background: var(--soft); border-bottom: 1px solid var(--line); overflow: hidden; }
+    .step img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .step .caption { padding: 10px 12px; }
+    .step .title { display: flex; gap: 8px; font-weight: 600; }
+    .step .title .mono { color: var(--muted); font-weight: 400; }
+    .step p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+    .crops { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+    .crops img { display: block; height: 64px; max-width: 100%; border: 1px solid var(--line); }
+
+    /* Key/value rows */
+    .kv { margin: 0; }
+    .kv div { display: flex; justify-content: space-between; gap: 24px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .kv div:last-child { border-bottom: 0; }
+    .kv dt { flex: none; color: var(--muted); }
+    .kv dd { margin: 0; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+    pre { margin: 16px 0 0; padding: 12px; max-height: 180px; overflow: auto; background: var(--soft);
+          white-space: pre-wrap; font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+    .err { margin-bottom: 12px; padding: 8px 12px; border: 1px solid var(--fg); font-size: 13px; }
+
+    /* Zoom dialog */
+    dialog { width: min(1100px, 94vw); padding: 0; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+    dialog:focus { outline: none; }
+    dialog::backdrop { background: rgb(0 0 0 / .7); }
+    dialog .viewer { aspect-ratio: auto; max-height: 72vh; }
+    dialog .viewer img { max-height: 72vh; }
+    dialog .caption { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
+    dialog .caption p { margin-top: 2px; color: var(--muted); font-size: 13px; }
+
+    /* Map pins */
+    .pin { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #0a0a0a; color: #fff;
+           border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .4); font: 600 11px ui-sans-serif, system-ui, sans-serif; }
+    .pin.g { background: #fff; color: #0a0a0a; border-color: #0a0a0a; }
+    .pin.f { border-radius: 0; }
+
+    /* Final prediction */
+    .final-top { display: flex; align-items: flex-start; gap: 16px; padding: 20px 16px; cursor: pointer; }
+    .final-top + .places { border-top: 1px solid var(--line); }
+    .final-top > div { flex: 1; min-width: 0; }
+    .final-top .label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .final-name { margin-top: 6px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+    .final-meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
+    .final-top p { margin-top: 10px; max-width: 75ch; }
+    .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .places .name small { display: block; color: var(--muted); font-size: 12px; white-space: normal; }
+
+    @media (max-width: 900px) {
+      header { flex-wrap: wrap; padding: 12px 16px; }
+      #status { order: 5; flex-basis: 100%; max-width: none; }
+      main { padding: 16px 16px 48px; }
+      .row { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat:nth-child(2) { border-right: 0; }
+      .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .stat .value { font-size: 16px; }
+      .brand .muted, .places .bar { display: none; }
+    }
   </style>
 </head>
 <body>
+<header>
+  <div class="brand"><h1>GeoManJi</h1><span class="muted">Visual geolocation · India</span></div>
+  <span id="status"></span>
+  <form id="form">
+    <label class="btn ghost">Choose image<input id="file" name="img" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
+  </form>
+  <button class="btn" id="submit" form="form" type="submit" disabled>Analyze</button>
+</header>
+
 <main>
-  <aside>
-    <h1>India visual matches</h1>
-    <p class="lede">Upload one photograph to see the separate Gemini OCR, GeoCLIP, and PLONK results.</p>
-    <form id="upload-form">
-      <input id="image" name="img" type="file" accept="image/png,image/jpeg,image/webp" required>
-      <button id="submit" type="submit">Find five places</button>
-    </form>
-    <div id="status">Ready.</div>
-    <section id="results" aria-live="polite"></section>
-  </aside>
-  <div id="map" aria-label="OpenStreetMap with prediction pins"></div>
+  <label class="drop" id="drop" for="file">
+    <strong>Drop a photo here</strong>
+    <span class="muted">or click to choose · PNG, JPEG, WebP</span>
+  </label>
+
+  <div id="app" hidden>
+    <section class="panel">
+      <div class="panel-head"><h2>Final prediction</h2><span class="muted">Gemini · weighs CV, OCR, GeoCLIP and PLONK</span></div>
+      <div id="final"></div>
+    </section>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="row">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Image</h2>
+          <div class="seg" role="tablist">
+            <button type="button" role="tab" data-view="original" aria-selected="true">Original</button>
+            <button type="button" role="tab" data-view="annotated" aria-selected="false" disabled>Annotated</button>
+          </div>
+        </div>
+        <div class="viewer"><img id="preview" alt="Selected image"></div>
+        <div class="legend">
+          <span><i class="swatch" style="border-color: var(--text-box)"></i>Text region</span>
+          <span><i class="swatch" style="border-color: var(--plate-box)"></i>Number plate</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Location</h2><span class="muted" id="plonk-note"></span></div>
+        <div id="map" aria-label="Map of predicted locations"></div>
+        <div class="route" id="route" aria-live="polite" hidden></div>
+        <ol class="places" id="places"></ol>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Computer vision pipeline</h2><span class="muted">OpenCV · click any step to enlarge</span></div>
+      <div id="pipeline"></div>
+    </section>
+
+    <div class="row">
+      <section class="panel">
+        <div class="panel-head"><h2>Text &amp; evidence</h2><span class="muted">Gemini · reads the photo and CV crops</span></div>
+        <div class="panel-body" id="ocr"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Models</h2><span class="muted">GeoCLIP · PLONK</span></div>
+        <div class="panel-body" id="models"></div>
+      </section>
+    </div>
+  </div>
 </main>
+
+<dialog id="zoom">
+  <div class="viewer"><img id="zoom-img" alt=""></div>
+  <div class="caption">
+    <div><strong id="zoom-title"></strong><p id="zoom-text"></p></div>
+    <form method="dialog"><button class="btn ghost">Close</button></form>
+  </div>
+</dialog>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  const map = L.map('map', { zoomControl: true }).setView([22.8, 79.6], 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(map);
-  const pins = L.layerGroup().addTo(map);
-  const form = document.querySelector('#upload-form');
-  const submit = document.querySelector('#submit');
-  const status = document.querySelector('#status');
-  const results = document.querySelector('#results');
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const pct = v => Number.isFinite(+v) ? `${(+v * 100).toFixed(1)}%` : '—';
+  const kv = rows => `<dl class="kv">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  const GROUPS = {
+    preprocess: ['Preprocessing', 'resize · CLAHE · blur check'],
+    morphology: ['Morphology', 'text-region extraction'],
+    detection: ['Detection', 'connected components · NMS · Haar cascade'],
+  };
 
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+  // Map is created when #app first becomes visible so Leaflet can measure it.
+  let map, pins;
+  function ensureMap() {
+    if (map) return map.invalidateSize();
+    map = L.map('map', { scrollWheelZoom: false }).setView([22.8, 79.6], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    pins = L.layerGroup().addTo(map);
   }
+  const pinIcon = (label, cls = '') => L.divIcon({ className: '', html: `<div class="pin ${cls}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 
-  function formatPercent(value) {
-    return Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : 'Unavailable';
+  // Routing: browser geolocation for the start, public OSRM server for the road route.
+  let routeLayer, here;
+  function clearRoute() {
+    if (routeLayer) routeLayer.remove();
+    routeLayer = null;
+    $('#route').hidden = true;
   }
+  function locate() {
+    if (here) return Promise.resolve(here);
+    if (!navigator.geolocation) return Promise.reject(new Error('This browser cannot share its location.'));
+    return new Promise((ok, fail) => navigator.geolocation.getCurrentPosition(
+      pos => ok(here = [pos.coords.latitude, pos.coords.longitude]),
+      err => fail(new Error(err.code === 1 ? 'Location permission was denied.' : 'Could not get your location.')),
+      { timeout: 10000 }));
+  }
+  const duration = s => { const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; };
 
-  function renderGeoCLIP(payload, bounds) {
-    const latitude = Number(payload.Latitude);
-    const longitude = Number(payload.Longitude);
-    const validCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
-    const card = document.createElement('section');
-    card.className = 'component';
-    card.innerHTML = `<h2>1. GeoCLIP coordinate</h2>${validCoordinates
-      ? `<p><strong>${latitude.toFixed(6)}, ${longitude.toFixed(6)}</strong></p><p class="muted">Model probability: ${formatPercent(payload.Probability)}</p>`
-      : '<p class="error">No GeoCLIP coordinate was returned.</p>'}`;
-    results.appendChild(card);
-    if (validCoordinates) {
-      const coords = [latitude, longitude];
-      bounds.push(coords);
-      const icon = L.divIcon({ className: '', html: '<div class="pin pin-geoclip">G</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
-      L.marker(coords, { icon }).bindPopup(`<strong>GeoCLIP prediction</strong><br>${latitude.toFixed(5)}, ${longitude.toFixed(5)}<br>Probability: ${formatPercent(payload.Probability)}`).addTo(pins);
+  // The map sits below the final prediction, so bring it into view before acting on it.
+  const showMap = () => $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  async function routeTo(name, lat, lon) {
+    showMap();
+    const box = $('#route');
+    box.hidden = false;
+    box.innerHTML = '<span class="muted">Getting your location…</span>';
+    try {
+      const [fromLat, fromLon] = await locate();
+      box.innerHTML = `<span class="muted">Finding a route to ${esc(name)}…</span>`;
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${lon},${lat}?overview=full&geometries=geojson`);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes?.length) throw new Error(`No driving route to ${name}.`);
+      const route = data.routes[0];
+      const line = L.geoJSON(route.geometry, { style: { color: getComputedStyle(document.documentElement).getPropertyValue('--fg'), weight: 4 } });
+      if (routeLayer) routeLayer.remove();
+      routeLayer = L.layerGroup([line, L.marker([fromLat, fromLon], { icon: pinIcon('●', 'g') }).bindPopup('You are here')]).addTo(map);
+      map.fitBounds(line.getBounds(), { padding: [30, 30] });
+      box.innerHTML = `<span><strong>${esc(name)}</strong> <span class="mono muted">${Math.round(route.distance / 1000)} km · ${duration(route.duration)}</span></span>
+        <a href="https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLon}&destination=${lat},${lon}" target="_blank" rel="noreferrer">Directions ↗</a>
+        <button type="button" id="route-clear">Clear</button>`;
+      $('#route-clear').addEventListener('click', clearRoute);
+    } catch (err) {
+      box.innerHTML = `<span>${esc(err.message)}</span><button type="button" id="route-clear">Dismiss</button>`;
+      $('#route-clear').addEventListener('click', clearRoute);
     }
   }
 
-  function renderGemini(payload) {
-    const ocr = payload.ocr || {};
-    const analysis = payload.analysis || {};
-    const languages = Array.isArray(ocr.languages) ? ocr.languages : [];
-    const clues = Array.isArray(payload.evidence) ? payload.evidence : [];
-    const languageText = languages.length
-      ? languages.map(language => `${language.name}${language.script ? ` (${language.script})` : ''}`).join(', ')
-      : 'None detected';
-    const clueHtml = clues.length
-      ? `<div class="component-list">${clues.map(clue => `<p class="muted"><strong>${escapeHtml(clue.label || clue.type)}:</strong> ${escapeHtml(clue.value)}${clue.evidence ? `<br>Evidence: ${escapeHtml(clue.evidence)}` : ''}</p>`).join('')}</div>`
-      : '<p class="muted">No location clues returned.</p>';
-    const card = document.createElement('section');
-    card.className = 'component';
-    card.innerHTML = `<h2>2. Gemini OCR and evidence</h2>
-      <p><strong>Source:</strong> ${escapeHtml(analysis.source || 'Unavailable')}</p>
-      ${analysis.error ? `<p class="error">${escapeHtml(analysis.error)}</p>` : ''}
-      <p><strong>Languages:</strong> ${escapeHtml(languageText)}</p>
-      <p><strong>Area guess:</strong> ${escapeHtml(payload.area_guess || 'None')}</p>
-      ${payload.area_evidence ? `<p class="muted">Evidence: ${escapeHtml(payload.area_evidence)}</p>` : ''}
-      <div class="ocr-text">${escapeHtml(ocr.text || 'No OCR text returned.')}</div>
-      ${clueHtml}`;
-    results.appendChild(card);
+  // Image viewer
+  const images = { original: null, annotated: null };
+  function show(view) {
+    $('#preview').src = images[view];
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-selected', b.dataset.view === view));
+  }
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+
+  function zoom(src, title, text) {
+    $('#zoom-img').src = src;
+    $('#zoom-title').textContent = title;
+    $('#zoom-text').textContent = text;
+    $('#zoom').showModal();
+  }
+  $('#zoom').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
+  const placeholder = text => `<p class="placeholder">${text}</p>`;
+  function reset() {
+    $('#stats').innerHTML = [['Sharpness'], ['Text regions'], ['Plates'], ['GeoCLIP']]
+      .map(([l]) => `<div class="stat"><div class="label">${l}</div><div class="value">—</div><div class="note">&nbsp;</div></div>`).join('');
+    $('#final').innerHTML = placeholder('The combined prediction appears here after analysis.');
+    $('#places').innerHTML = `<li style="cursor:default">${placeholder('Run Analyze to rank places in India.')}</li>`;
+    $('#pipeline').innerHTML = placeholder('Each OpenCV stage appears here after analysis.');
+    $('#ocr').innerHTML = placeholder('Detected text and clues appear here.');
+    $('#models').innerHTML = placeholder('Model outputs appear here.');
+    $('#plonk-note').textContent = '';
+    images.annotated = null;
+    $('[data-view=annotated]').disabled = true;
+    if (pins) pins.clearLayers();
+    clearRoute();
   }
 
-  function renderPLONK(payload, bounds) {
-    const places = Array.isArray(payload.similar_places) ? payload.similar_places : [];
-    const plonk = payload.plonk || {};
-    const section = document.createElement('section');
-    section.className = 'component';
-    section.innerHTML = `<h2>3. PLONK India candidates</h2>
-      <p><strong>${Number(plonk.india_samples || 0)}</strong> of <strong>${Number(plonk.generated_samples || 0)}</strong> generated samples retained in India (${formatPercent(plonk.india_sample_share)}).</p>
-      <p class="muted">Model: ${escapeHtml(plonk.model || 'Unavailable')}</p>
-      ${plonk.error ? `<p class="error">${escapeHtml(plonk.error)}</p>` : ''}`;
-    const list = document.createElement('div');
-    list.className = 'component-list';
-    places.forEach(place => {
-      const coords = [place.latitude, place.longitude];
-      bounds.push(coords);
-      const icon = L.divIcon({ className: '', html: `<div class="pin">${place.rank}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] });
-      L.marker(coords, { icon }).bindPopup(`<strong>${escapeHtml(place.name)}</strong><br>${place.latitude.toFixed(5)}, ${place.longitude.toFixed(5)}<br>${(place.sample_share * 100).toFixed(1)}% of India samples<br>${escapeHtml(place.ranking_reason)}`).addTo(pins);
-      const card = document.createElement('article');
-      card.className = 'place';
-      card.innerHTML = `<span class="rank">${place.rank}</span><div><strong>${escapeHtml(place.name)}${place.evidence_match ? ' · OCR match' : ''}</strong><small>${escapeHtml(place.display_name || `${place.latitude.toFixed(4)}, ${place.longitude.toFixed(4)}`)}</small></div><a href="${place.map_url}" target="_blank" rel="noreferrer">OSM ↗</a>`;
-      card.addEventListener('click', event => { if (event.target.tagName !== 'A') map.flyTo(coords, 11); });
-      list.appendChild(card);
+  function pick(file) {
+    if (!file) return;
+    if (images.original) URL.revokeObjectURL(images.original);
+    images.original = URL.createObjectURL(file);
+    $('#drop').hidden = true;
+    $('#app').hidden = false;
+    $('#submit').disabled = false;
+    $('#status').textContent = file.name;
+    reset();
+    show('original');
+    ensureMap();
+    map.setView([22.8, 79.6], 4);
+  }
+  $('#file').addEventListener('change', e => pick(e.target.files[0]));
+  ['dragover', 'dragleave', 'drop'].forEach(type => document.addEventListener(type, e => {
+    e.preventDefault();
+    $('#drop').classList.toggle('over', type === 'dragover');
+    if (type === 'drop' && e.dataTransfer.files[0]) {
+      $('#file').files = e.dataTransfer.files;
+      pick(e.dataTransfer.files[0]);
+    }
+  }));
+
+  function renderStats(p) {
+    const cv = p.cv || {}, g = p.geoclip || {};
+    const hasCoord = Number.isFinite(g.latitude);
+    $('#stats').innerHTML = [
+      ['Sharpness', cv.sharpness ?? '—', cv.error ? 'unavailable' : (cv.blurry ? 'Blurry image' : 'Sharp image')],
+      ['Text regions', (cv.text_regions || []).length, 'morphology + contours'],
+      ['Plates', (cv.plates || []).length, 'Haar cascade'],
+      ['GeoCLIP', hasCoord ? `${g.latitude.toFixed(3)}, ${g.longitude.toFixed(3)}` : '—', hasCoord ? `p = ${pct(g.probability)}` : 'no coordinate'],
+    ].map(([l, v, n]) => `<div class="stat"><div class="label">${l}</div><div class="value mono">${esc(v)}</div><div class="note">${esc(n)}</div></div>`).join('');
+  }
+
+  function renderPipeline(cv) {
+    if (cv.error || !cv.stages) { $('#pipeline').innerHTML = `<div class="panel-body"><p class="err">${esc(cv.error || 'No pipeline output.')}</p></div>`; return; }
+    let n = 0;
+    $('#pipeline').innerHTML = Object.entries(GROUPS).map(([key, [title, sub]]) => {
+      const steps = cv.stages.filter(s => s.group === key).map(s => {
+        const i = cv.stages.indexOf(s);
+        return `<button type="button" class="step" data-i="${i}">
+          <div class="thumb"><img src="${s.image}" alt="${esc(s.name)}" loading="lazy"></div>
+          <div class="caption"><div class="title"><span class="mono">${String(++n).padStart(2, '0')}</span>${esc(s.name)}</div><p>${esc(s.description)}</p></div>
+        </button>`;
+      }).join('');
+      return `<div class="group"><h3>${title}<span>${sub}</span></h3><div class="steps">${steps}</div></div>`;
+    }).join('') + `<div class="group"><h3>Hand-off to OCR<span>full-resolution crops sent to Gemini with the photo</span></h3>
+      ${cv.ocr_crops?.length ? `<div class="crops">${cv.ocr_crops.map((src, i) => `<img src="${src}" alt="Crop ${i + 1}">`).join('')}</div>`
+        : '<p class="muted">No text regions or plates found; Gemini reads the full photo only.</p>'}</div>`;
+    $('#pipeline').querySelectorAll('.step').forEach(el => el.addEventListener('click', () => {
+      const s = cv.stages[+el.dataset.i];
+      zoom(s.image, s.name, s.description);
+    }));
+  }
+
+  function renderPlaces(p) {
+    const plonk = p.plonk || {}, places = plonk.places || [], g = p.geoclip || {};
+    $('#plonk-note').textContent = plonk.generated_samples ? `${plonk.india_samples} of ${plonk.generated_samples} samples in India` : '';
+    $('#places').innerHTML = places.map(pl => `<li data-lat="${pl.latitude}" data-lon="${pl.longitude}">
+        <span class="rank">${pl.rank}</span>
+        <span class="name">${esc(pl.name)}</span>
+        ${pl.evidence_match ? '<span class="tag">OCR</span>' : ''}
+        <span class="bar"><i style="width:${Math.min(100, pl.sample_share * 100)}%"></i></span>
+        <span class="share mono">${pct(pl.sample_share)}</span>
+        <button type="button" class="route-btn">Route</button>
+      </li>`).join('') || `<li style="cursor:default">${placeholder(esc(plonk.error || 'No places found in India.'))}</li>`;
+    $('#places').querySelectorAll('li[data-lat]').forEach((li, i) => li.addEventListener('click', e => {
+      if (e.target.closest('.route-btn')) routeTo(places[i].name, +li.dataset.lat, +li.dataset.lon);
+      else map.flyTo([+li.dataset.lat, +li.dataset.lon], 10);
+    }));
+
+    if (Number.isFinite(g.latitude)) {
+      L.marker([g.latitude, g.longitude], { icon: pinIcon('G', 'g') }).bindPopup('GeoCLIP prediction').addTo(pins);
+    }
+    places.forEach(pl => {
+      L.marker([pl.latitude, pl.longitude], { icon: pinIcon(pl.rank) }).bindPopup(esc(pl.name)).addTo(pins);
     });
-    if (!places.length) list.innerHTML = '<p class="muted">No India candidates returned.</p>';
-    section.appendChild(list);
-    results.appendChild(section);
   }
 
-  function renderResults(payload) {
+  const SOURCES = { image: 'Image', cv: 'CV', ocr: 'OCR', geoclip: 'GeoCLIP', plonk: 'PLONK' };
+  const letter = i => String.fromCharCode(65 + i);
+  function renderFinal(p) {
+    const final = p.final || {}, places = final.places || [];
+    if (!places.length) {
+      $('#final').innerHTML = `<div class="panel-body">${final.error ? `<p class="err">${esc(final.error)}</p>` : placeholder('No final prediction returned.')}</div>`;
+      return;
+    }
+    const [top, ...rest] = places;
+    const tags = pl => (pl.sources || []).map(s => `<span class="tag">${esc(SOURCES[s] || s)}</span>`).join('');
+    $('#final').innerHTML = `<div class="final-top" data-i="0">
+        <div>
+          <div class="label"><span class="rank">A</span>Most likely</div>
+          <div class="final-name">${esc(top.name)}</div>
+          <div class="final-meta mono">${top.latitude.toFixed(4)}, ${top.longitude.toFixed(4)} · ${pct(top.confidence)} confidence</div>
+          <p>${esc(top.reasoning)}</p>
+          <div class="sources">${tags(top)}</div>
+        </div>
+        <button type="button" class="route-btn">Route</button>
+      </div>` + (rest.length ? `<ol class="places">${rest.map((pl, i) => `<li data-i="${i + 1}">
+        <span class="rank">${letter(i + 1)}</span>
+        <span class="name">${esc(pl.name)}<small>${esc(pl.reasoning)}</small></span>
+        <span class="share mono">${pct(pl.confidence)}</span>
+        <button type="button" class="route-btn">Route</button>
+      </li>`).join('')}</ol>` : '');
+    $('#final').querySelectorAll('[data-i]').forEach(el => el.addEventListener('click', e => {
+      const pl = places[+el.dataset.i];
+      if (e.target.closest('.route-btn')) return routeTo(pl.name, pl.latitude, pl.longitude);
+      showMap();
+      map.flyTo([pl.latitude, pl.longitude], 11);
+    }));
+    places.forEach((pl, i) => L.marker([pl.latitude, pl.longitude], { icon: pinIcon(letter(i), 'f'), zIndexOffset: 1000 })
+      .bindPopup(`<strong>${esc(pl.name)}</strong><br>Final prediction ${letter(i)}`).addTo(pins));
+  }
+
+  function renderText(p) {
+    const ocr = p.ocr || {};
+    const langs = (ocr.languages || []).map(l => l.name).join(', ') || '—';
+    const clues = (ocr.clues || []).map(c => [c.label || c.type, esc(c.value)]);
+    $('#ocr').innerHTML = (ocr.error ? `<p class="err">${esc(ocr.error)}</p>` : '') +
+      kv([['Languages', esc(langs)], ['Area guess', esc(ocr.area_guess || '—')], ...clues]) +
+      `<pre>${esc(ocr.text || 'No text found.')}</pre>`;
+  }
+
+  function renderModels(p) {
+    const plonk = p.plonk || {}, g = p.geoclip || {};
+    const hasCoord = Number.isFinite(g.latitude);
+    $('#models').innerHTML = kv([
+      ['GeoCLIP coordinate', `<span class="mono">${hasCoord ? `${g.latitude.toFixed(5)}, ${g.longitude.toFixed(5)}` : '—'}</span>`],
+      ['GeoCLIP probability', `<span class="mono">${pct(g.probability)}</span>`],
+      ['PLONK samples in India', `<span class="mono">${plonk.india_samples ?? '—'} / ${plonk.generated_samples ?? '—'}</span>`],
+    ]) + [g.error, plonk.error].filter(Boolean).map(e => `<p class="err" style="margin:12px 0 0">${esc(e)}</p>`).join('');
+  }
+
+  function render(p) {
+    const cv = p.cv || {};
     pins.clearLayers();
-    results.innerHTML = '';
-    const bounds = [];
-    renderGeoCLIP(payload, bounds);
-    renderGemini(payload);
-    renderPLONK(payload, bounds);
-    if (bounds.length) map.fitBounds(bounds, { padding: [45, 45], maxZoom: 10 });
+    renderFinal(p);
+    renderStats(p);
+    renderPlaces(p);
+    if (pins.getLayers().length) map.fitBounds(L.featureGroup(pins.getLayers()).getBounds(), { padding: [30, 30], maxZoom: 10 });
+    renderPipeline(cv);
+    renderText(p);
+    renderModels(p);
+    if (cv.annotated_image) {
+      images.annotated = cv.annotated_image;
+      $('[data-view=annotated]').disabled = false;
+      show('annotated');
+    }
   }
 
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    submit.disabled = true;
-    status.textContent = 'Running GeoCLIP, Gemini OCR, and PLONK. First use downloads model weights and can take several minutes…';
-    results.innerHTML = '';
+  $('#form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('#file').files[0]?.name || 'image';
+    $('#submit').disabled = true;
+    const started = Date.now();
+    const secs = () => Math.round((Date.now() - started) / 1000);
+    $('#status').textContent = `${name} · Analyzing…`;
+    const tick = setInterval(() => { $('#status').textContent = `${name} · Analyzing… ${secs()}s`; }, 1000);
     try {
-      const response = await fetch('/image', { method: 'POST', body: new FormData(form) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || `Request failed (${response.status})`);
-      const places = payload.similar_places || [];
-      renderResults(payload);
-      status.textContent = places.length
-        ? `${places.length} India-only matches from ${payload.plonk.india_samples} of ${payload.plonk.generated_samples} PLONK samples.`
-        : `No India matches: ${payload.plonk.error || 'the model produced no samples inside the filter.'}`;
-    } catch (error) {
-      status.textContent = `Unable to complete inference: ${error.message}`;
+      const res = await fetch('/image', { method: 'POST', body: new FormData($('#form')) });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || `Request failed (${res.status})`);
+      render(payload);
+      $('#status').textContent = `${name} · Done in ${secs()}s`;
+    } catch (err) {
+      $('#status').textContent = `${name} · Error: ${err.message}`;
     } finally {
-      submit.disabled = false;
+      clearInterval(tick);
+      $('#submit').disabled = false;
     }
   });
 </script>
