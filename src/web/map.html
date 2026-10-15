@@ -8,7 +8,7 @@
   <style>
     :root {
       --bg: #fff; --fg: #0a0a0a; --muted: #737373; --line: #e5e5e5; --soft: #f5f5f5; --panel: #fff;
-      --text-box: #00c800; --plate-box: #ff0000;
+      --text-box: #00c800;
       font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
       color-scheme: light;
     }
@@ -87,9 +87,30 @@
     .route-btn { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--fg); background: none; color: var(--fg);
                  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
     .route-btn:hover { background: var(--fg); color: var(--bg); }
-    .route { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
-    .route > :first-child { margin-right: auto; }
-    .route a, .route button { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+    .route { display: grid; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .route-head, .route-links { display: flex; align-items: center; gap: 16px; }
+    .route-head > :first-child { margin-right: auto; min-width: 0; }
+    .route-links a, .route-head button { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+    .modes { display: flex; }
+    .modes button { flex: 1; display: grid; height: auto; padding: 6px 12px; line-height: 1.3; text-align: left; }
+    .modes button .mono { font-size: 11px; opacity: .75; }
+    .stats.sm .stat { padding: 8px 12px; }
+    .stats.sm .stat .value { font-size: 15px; }
+
+    /* Flow */
+    .flow { display: flex; align-items: center; gap: 10px; padding: 16px; overflow-x: auto; }
+    .flow > .node { flex: 1 1 0; }
+    .arrow { flex: none; color: var(--muted); }
+    .par { flex: 2.6 1 0; display: grid; gap: 8px; padding: 8px; border: 1px dashed var(--line); min-width: 0; }
+    .par > .k { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .lane { display: flex; align-items: center; gap: 10px; }
+    .lane .node { flex: 1 1 0; }
+    .node { display: grid; min-width: 120px; padding: 8px 12px; border: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .node:hover { border-color: var(--fg); }
+    .node strong { font-size: 13px; }
+    .node .v { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .node.failed { border-color: var(--fg); border-style: dashed; }
+    .panel { scroll-margin-top: 80px; }
 
     /* Pipeline */
     .group { padding: 16px; border-bottom: 1px solid var(--line); }
@@ -154,6 +175,8 @@
       .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
       .stat .value { font-size: 16px; }
       .brand .muted, .places .bar { display: none; }
+      .flow, .lane { flex-direction: column; align-items: stretch; }
+      .arrow { align-self: center; transform: rotate(90deg); }
     }
   </style>
 </head>
@@ -179,6 +202,30 @@
       <div id="final"></div>
     </section>
 
+    <section class="panel">
+      <div class="panel-head"><h2>Flow</h2><span class="muted">How the photo moves through GeoManJi · click a stage</span></div>
+      <div class="flow">
+        <button type="button" class="node" id="f-image" data-go="#preview"><strong>Photo</strong><span class="v"></span></button>
+        <span class="arrow">→</span>
+        <div class="par">
+          <span class="k">In parallel</span>
+          <div class="lane">
+            <button type="button" class="node" id="f-cv" data-go="#pipeline"><strong>OpenCV</strong><span class="v"></span></button>
+            <span class="arrow">→</span>
+            <button type="button" class="node" id="f-ocr" data-go="#ocr"><strong>Gemini OCR</strong><span class="v"></span></button>
+          </div>
+          <div class="lane">
+            <button type="button" class="node" id="f-geoclip" data-go="#models"><strong>GeoCLIP</strong><span class="v"></span></button>
+            <button type="button" class="node" id="f-plonk" data-go="#places"><strong>PLONK India</strong><span class="v"></span></button>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+        <button type="button" class="node" id="f-match" data-go="#places"><strong>Evidence match</strong><span class="v"></span></button>
+        <span class="arrow">→</span>
+        <button type="button" class="node" id="f-fusion" data-go="#final"><strong>Gemini fusion</strong><span class="v"></span></button>
+      </div>
+    </section>
+
     <div class="stats" id="stats"></div>
 
     <div class="row">
@@ -193,7 +240,6 @@
         <div class="viewer"><img id="preview" alt="Selected image"></div>
         <div class="legend">
           <span><i class="swatch" style="border-color: var(--text-box)"></i>Text region</span>
-          <span><i class="swatch" style="border-color: var(--plate-box)"></i>Number plate</span>
         </div>
       </section>
 
@@ -206,7 +252,10 @@
     </div>
 
     <section class="panel">
-      <div class="panel-head"><h2>Computer vision pipeline</h2><span class="muted">OpenCV · click any step to enlarge</span></div>
+      <div class="panel-head">
+        <h2>Computer vision pipeline</h2>
+        <button type="button" class="route-btn" id="cv-more" aria-expanded="false" hidden>Show preprocessing &amp; morphology</button>
+      </div>
       <div id="pipeline"></div>
     </section>
 
@@ -240,7 +289,7 @@
   const GROUPS = {
     preprocess: ['Preprocessing', 'resize · CLAHE · blur check'],
     morphology: ['Morphology', 'text-region extraction'],
-    detection: ['Detection', 'connected components · NMS · Haar cascade'],
+    detection: ['Detection', 'letter check · DB text detector · region merge'],
   };
 
   // Map is created when #app first becomes visible so Leaflet can measure it.
@@ -255,11 +304,13 @@
   }
   const pinIcon = (label, cls = '') => L.divIcon({ className: '', html: `<div class="pin ${cls}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 
-  // Routing: browser geolocation for the start, public OSRM server for the road route.
-  let routeLayer, here;
+  // Routing: browser geolocation for the start, FOSSGIS OSRM servers (car/bike/foot profiles) for the route.
+  const MODES = { car: ['Car', 'driving'], bike: ['Bike', 'bicycling'], foot: ['Walk', 'walking'] };
+  let routeLayer, here, trip, mode = 'car', routeSeq = 0;
   function clearRoute() {
     if (routeLayer) routeLayer.remove();
-    routeLayer = null;
+    routeLayer = trip = null;
+    routeSeq++;
     $('#route').hidden = true;
   }
   function locate() {
@@ -270,35 +321,99 @@
       err => fail(new Error(err.code === 1 ? 'Location permission was denied.' : 'Could not get your location.')),
       { timeout: 10000 }));
   }
-  const duration = s => { const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; };
+  const duration = s => {
+    const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.round(s % 3600 / 60);
+    return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
+  };
+  const arrival = s => {
+    const t = new Date(Date.now() + s * 1000);
+    const sameDay = t.toDateString() === new Date().toDateString();
+    return t.toLocaleString([], { ...(sameDay ? {} : { weekday: 'short' }), hour: 'numeric', minute: '2-digit' });
+  };
 
   // The map sits below the final prediction, so bring it into view before acting on it.
   const showMap = () => $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  async function routeTo(name, lat, lon) {
-    showMap();
+  function routeMessage(text) {
     const box = $('#route');
     box.hidden = false;
-    box.innerHTML = '<span class="muted">Getting your location…</span>';
+    box.innerHTML = `<div class="route-head"><span class="muted">${text}</span><button type="button" id="route-clear">Dismiss</button></div>`;
+    $('#route-clear').addEventListener('click', clearRoute);
+  }
+
+  async function routeTo(name, lat, lon) {
+    showMap();
+    const seq = ++routeSeq;
+    routeMessage('Getting your location…');
     try {
-      const [fromLat, fromLon] = await locate();
-      box.innerHTML = `<span class="muted">Finding a route to ${esc(name)}…</span>`;
-      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${lon},${lat}?overview=full&geometries=geojson`);
-      const data = await res.json();
-      if (data.code !== 'Ok' || !data.routes?.length) throw new Error(`No driving route to ${name}.`);
-      const route = data.routes[0];
-      const line = L.geoJSON(route.geometry, { style: { color: getComputedStyle(document.documentElement).getPropertyValue('--fg'), weight: 4 } });
-      if (routeLayer) routeLayer.remove();
-      routeLayer = L.layerGroup([line, L.marker([fromLat, fromLon], { icon: pinIcon('●', 'g') }).bindPopup('You are here')]).addTo(map);
-      map.fitBounds(line.getBounds(), { padding: [30, 30] });
-      box.innerHTML = `<span><strong>${esc(name)}</strong> <span class="mono muted">${Math.round(route.distance / 1000)} km · ${duration(route.duration)}</span></span>
-        <a href="https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLon}&destination=${lat},${lon}" target="_blank" rel="noreferrer">Directions ↗</a>
-        <button type="button" id="route-clear">Clear</button>`;
-      $('#route-clear').addEventListener('click', clearRoute);
+      const from = await locate();
+      if (seq !== routeSeq) return;
+      routeMessage(`Finding routes to ${esc(name)}…`);
+      const fetched = await Promise.all(Object.keys(MODES).map(m =>
+        fetch(`https://routing.openstreetmap.de/routed-${m}/route/v1/driving/${from[1]},${from[0]};${lon},${lat}?overview=full&geometries=geojson`)
+          .then(r => r.json()).then(d => d.code === 'Ok' ? d.routes[0] : null).catch(() => null)));
+      if (seq !== routeSeq) return;
+      const routes = Object.fromEntries(Object.keys(MODES).map((m, i) => [m, fetched[i]]));
+      if (!fetched.some(Boolean)) throw new Error(`No route to ${name}.`);
+      if (!routes[mode]) mode = Object.keys(routes).find(m => routes[m]);
+      trip = { name, from, to: [lat, lon], routes };
+      drawTrip();
     } catch (err) {
-      box.innerHTML = `<span>${esc(err.message)}</span><button type="button" id="route-clear">Dismiss</button>`;
-      $('#route-clear').addEventListener('click', clearRoute);
+      if (seq === routeSeq) routeMessage(esc(err.message));
     }
+  }
+
+  function drawTrip() {
+    const { name, from, to, routes } = trip, r = routes[mode];
+    const line = L.geoJSON(r.geometry, { style: {
+      color: getComputedStyle(document.documentElement).getPropertyValue('--fg'), weight: 4, dashArray: mode === 'car' ? null : '1 8' } });
+    if (routeLayer) routeLayer.remove();
+    routeLayer = L.layerGroup([line, L.marker(from, { icon: pinIcon('●', 'g') }).bindPopup('You are here')]).addTo(map);
+    map.fitBounds(line.getBounds(), { padding: [30, 30] });
+    const gmaps = travel => `https://www.google.com/maps/dir/?api=1&origin=${from}&destination=${to}&travelmode=${travel}`;
+    const cell = (label, value) => `<div class="stat"><div class="label">${label}</div><div class="value mono">${value}</div></div>`;
+    $('#route').innerHTML = `
+      <div class="route-head"><span>Route to <strong>${esc(name)}</strong></span><button type="button" id="route-clear">Clear</button></div>
+      <div class="seg modes" role="tablist">${Object.entries(MODES).map(([m, [label]]) =>
+        `<button type="button" role="tab" data-mode="${m}" aria-selected="${m === mode}" ${routes[m] ? '' : 'disabled'}>
+          ${label}<span class="mono">${routes[m] ? duration(routes[m].duration) : 'no route'}</span></button>`).join('')}</div>
+      <div class="stats sm">
+        ${cell('Distance', `${(r.distance / 1000).toFixed(r.distance < 10000 ? 1 : 0)} km`)}
+        ${cell('Travel time', duration(r.duration))}
+        ${cell('Arrive by', arrival(r.duration))}
+        ${cell('Avg speed', `${Math.round(r.distance / r.duration * 3.6)} km/h`)}
+      </div>
+      <div class="route-links">
+        <a href="${gmaps(MODES[mode][1])}" target="_blank" rel="noreferrer">${MODES[mode][0]} directions ↗</a>
+        <a href="${gmaps('transit')}" target="_blank" rel="noreferrer">Public transit ↗</a>
+      </div>`;
+    $('#route-clear').addEventListener('click', clearRoute);
+    $('#route').querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { mode = b.dataset.mode; drawTrip(); }));
+  }
+
+  // Flow overview: one node per pipeline stage, each jumps to the panel holding its output.
+  function setFlow(notes) {
+    for (const [key, [text, failed]] of Object.entries(notes)) {
+      const node = $(`#f-${key}`), v = node.querySelector('.v');
+      v.textContent = v.title = text;
+      node.classList.toggle('failed', !!failed);
+    }
+  }
+  const flowAll = text => setFlow(Object.fromEntries(['cv', 'ocr', 'geoclip', 'plonk', 'match', 'fusion'].map(k => [k, [text]])));
+  document.querySelectorAll('.node').forEach(n => n.addEventListener('click', () =>
+    $(n.dataset.go).closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' })));
+
+  function renderFlow(p) {
+    const cv = p.cv || {}, ocr = p.ocr || {}, g = p.geoclip || {}, plonk = p.plonk || {}, final = p.final || {};
+    const places = plonk.places || [], langs = (ocr.languages || []).map(l => l.name).join(', ');
+    setFlow({
+      cv: [cv.error || `${(cv.text_regions || []).length} text regions${cv.blurry ? ' · blurry' : ''}`, cv.error],
+      ocr: [ocr.error || [langs || 'No text', ocr.area_guess].filter(Boolean).join(' · '), ocr.error],
+      geoclip: [g.error || (Number.isFinite(g.latitude) ? `${g.latitude.toFixed(2)}, ${g.longitude.toFixed(2)}` : '—'), g.error],
+      plonk: [plonk.error || `${places.length} places · ${plonk.india_samples ?? 0}/${plonk.generated_samples ?? 0} in India`, plonk.error],
+      match: [[`${places.filter(pl => pl.evidence_match).length} of ${places.length} places match OCR`, ...(p.plate_states || []).map(s => `${s.code} → ${s.state}`)].join(' · ')],
+      fusion: [final.error || final.places?.[0]?.name || 'No prediction', final.error],
+    });
   }
 
   // Image viewer
@@ -319,7 +434,7 @@
 
   const placeholder = text => `<p class="placeholder">${text}</p>`;
   function reset() {
-    $('#stats').innerHTML = [['Sharpness'], ['Text regions'], ['Plates'], ['GeoCLIP']]
+    $('#stats').innerHTML = [['Sharpness'], ['Text regions'], ['OCR crops'], ['GeoCLIP']]
       .map(([l]) => `<div class="stat"><div class="label">${l}</div><div class="value">—</div><div class="note">&nbsp;</div></div>`).join('');
     $('#final').innerHTML = placeholder('The combined prediction appears here after analysis.');
     $('#places').innerHTML = `<li style="cursor:default">${placeholder('Run Analyze to rank places in India.')}</li>`;
@@ -327,6 +442,8 @@
     $('#ocr').innerHTML = placeholder('Detected text and clues appear here.');
     $('#models').innerHTML = placeholder('Model outputs appear here.');
     $('#plonk-note').textContent = '';
+    $('#cv-more').hidden = true;
+    flowAll('Waiting');
     images.annotated = null;
     $('[data-view=annotated]').disabled = true;
     if (pins) pins.clearLayers();
@@ -342,6 +459,7 @@
     $('#submit').disabled = false;
     $('#status').textContent = file.name;
     reset();
+    setFlow({ image: [file.name] });
     show('original');
     ensureMap();
     map.setView([22.8, 79.6], 4);
@@ -361,11 +479,21 @@
     const hasCoord = Number.isFinite(g.latitude);
     $('#stats').innerHTML = [
       ['Sharpness', cv.sharpness ?? '—', cv.error ? 'unavailable' : (cv.blurry ? 'Blurry image' : 'Sharp image')],
-      ['Text regions', (cv.text_regions || []).length, 'morphology + contours'],
-      ['Plates', (cv.plates || []).length, 'Haar cascade'],
+      ['Text regions', (cv.text_regions || []).length, `${cv.morphology_regions ?? 0} morphology · ${cv.db_regions ?? 0} DB`],
+      ['OCR crops', (cv.ocr_crops || []).length, 'rectified + enhanced'],
       ['GeoCLIP', hasCoord ? `${g.latitude.toFixed(3)}, ${g.longitude.toFixed(3)}` : '—', hasCoord ? `p = ${pct(g.probability)}` : 'no coordinate'],
     ].map(([l, v, n]) => `<div class="stat"><div class="label">${l}</div><div class="value mono">${esc(v)}</div><div class="note">${esc(n)}</div></div>`).join('');
   }
+
+  // Preprocessing and morphology are intermediate images; hidden until asked for.
+  const EXTRA = ['preprocess', 'morphology'];
+  let showExtra = false;
+  $('#cv-more').addEventListener('click', e => {
+    showExtra = !showExtra;
+    e.currentTarget.setAttribute('aria-expanded', showExtra);
+    e.currentTarget.textContent = `${showExtra ? 'Hide' : 'Show'} preprocessing & morphology`;
+    EXTRA.forEach(k => { const g = $(`[data-group=${k}]`); if (g) g.hidden = !showExtra; });
+  });
 
   function renderPipeline(cv) {
     if (cv.error || !cv.stages) { $('#pipeline').innerHTML = `<div class="panel-body"><p class="err">${esc(cv.error || 'No pipeline output.')}</p></div>`; return; }
@@ -378,10 +506,11 @@
           <div class="caption"><div class="title"><span class="mono">${String(++n).padStart(2, '0')}</span>${esc(s.name)}</div><p>${esc(s.description)}</p></div>
         </button>`;
       }).join('');
-      return `<div class="group"><h3>${title}<span>${sub}</span></h3><div class="steps">${steps}</div></div>`;
-    }).join('') + `<div class="group"><h3>Hand-off to OCR<span>full-resolution crops sent to Gemini with the photo</span></h3>
+      return `<div class="group" ${EXTRA.includes(key) && !showExtra ? 'hidden' : ''} data-group="${key}"><h3>${title}<span>${sub}</span></h3><div class="steps">${steps}</div></div>`;
+    }).join('') + `<div class="group"><h3>Hand-off to OCR<span>perspective-corrected, CLAHE-enhanced and sharpened crops sent to Gemini with the photo</span></h3>
       ${cv.ocr_crops?.length ? `<div class="crops">${cv.ocr_crops.map((src, i) => `<img src="${src}" alt="Crop ${i + 1}">`).join('')}</div>`
-        : '<p class="muted">No text regions or plates found; Gemini reads the full photo only.</p>'}</div>`;
+        : '<p class="muted">No text regions found; Gemini reads the full photo only.</p>'}</div>`;
+    $('#cv-more').hidden = false;
     $('#pipeline').querySelectorAll('.step').forEach(el => el.addEventListener('click', () => {
       const s = cv.stages[+el.dataset.i];
       zoom(s.image, s.name, s.description);
@@ -397,12 +526,8 @@
         ${pl.evidence_match ? '<span class="tag">OCR</span>' : ''}
         <span class="bar"><i style="width:${Math.min(100, pl.sample_share * 100)}%"></i></span>
         <span class="share mono">${pct(pl.sample_share)}</span>
-        <button type="button" class="route-btn">Route</button>
       </li>`).join('') || `<li style="cursor:default">${placeholder(esc(plonk.error || 'No places found in India.'))}</li>`;
-    $('#places').querySelectorAll('li[data-lat]').forEach((li, i) => li.addEventListener('click', e => {
-      if (e.target.closest('.route-btn')) routeTo(places[i].name, +li.dataset.lat, +li.dataset.lon);
-      else map.flyTo([+li.dataset.lat, +li.dataset.lon], 10);
-    }));
+    $('#places').querySelectorAll('li[data-lat]').forEach(li => li.addEventListener('click', () => map.flyTo([+li.dataset.lat, +li.dataset.lon], 10)));
 
     if (Number.isFinite(g.latitude)) {
       L.marker([g.latitude, g.longitude], { icon: pinIcon('G', 'g') }).bindPopup('GeoCLIP prediction').addTo(pins);
@@ -452,7 +577,8 @@
     const langs = (ocr.languages || []).map(l => l.name).join(', ') || '—';
     const clues = (ocr.clues || []).map(c => [c.label || c.type, esc(c.value)]);
     $('#ocr').innerHTML = (ocr.error ? `<p class="err">${esc(ocr.error)}</p>` : '') +
-      kv([['Languages', esc(langs)], ['Area guess', esc(ocr.area_guess || '—')], ...clues]) +
+      kv([['Languages', esc(langs)], ['Area guess', esc(ocr.area_guess || '—')],
+        ...(p.plate_states || []).map(s => ['Plate state', `<span class="mono">${esc(s.plate)}</span> → ${esc(s.state)}`]), ...clues]) +
       `<pre>${esc(ocr.text || 'No text found.')}</pre>`;
   }
 
@@ -470,6 +596,7 @@
     const cv = p.cv || {};
     pins.clearLayers();
     renderFinal(p);
+    renderFlow(p);
     renderStats(p);
     renderPlaces(p);
     if (pins.getLayers().length) map.fitBounds(L.featureGroup(pins.getLayers()).getBounds(), { padding: [30, 30], maxZoom: 10 });
@@ -490,6 +617,7 @@
     const started = Date.now();
     const secs = () => Math.round((Date.now() - started) / 1000);
     $('#status').textContent = `${name} · Analyzing…`;
+    flowAll('Running…');
     const tick = setInterval(() => { $('#status').textContent = `${name} · Analyzing… ${secs()}s`; }, 1000);
     try {
       const res = await fetch('/image', { method: 'POST', body: new FormData($('#form')) });
@@ -499,6 +627,7 @@
       $('#status').textContent = `${name} · Done in ${secs()}s`;
     } catch (err) {
       $('#status').textContent = `${name} · Error: ${err.message}`;
+      flowAll('Failed');
     } finally {
       clearInterval(tick);
       $('#submit').disabled = false;

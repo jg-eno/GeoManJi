@@ -11,7 +11,7 @@ routing from your current location.
 ```text
 main.py                  FastAPI routes: /, /maps, POST /image
 src/pipeline.py          Orchestrator: runs the stages (in parallel) and builds the response
-src/cv.py                OpenCV stage: preprocessing, morphology, text regions, plates, OCR crops
+src/cv.py                OpenCV stage: preprocessing, morphology, DB text detection, rectified OCR crops
 src/gemini.py            Gemini client: OCR on photo + crops, and the final fusion step
 src/plonk_india/         PLONK sampling, India mask, clustering, Nominatim place names
 src/web/map.html         Single-page UI (upload, pipeline view, map, routing)
@@ -99,17 +99,26 @@ If Gemini is unavailable, the OCR fields are empty and the reason is reported in
 
 ## Classical CV pipeline
 
-`src/cv/classic.py` runs OpenCV on every upload, before OCR:
+`src/cv.py` runs OpenCV on every upload, before OCR:
 
 1. Preprocessing: resize to 800px wide, grayscale, CLAHE, Gaussian blur, and a
    Laplacian-variance blur check.
 2. Morphology: black-hat/top-hat (dark and light text), Otsu threshold, opening
    to remove noise, closing to merge letters into words and blocks.
-3. Detection: contours, a connected-component letter check (regions need five
-   or more letter-sized blobs of similar height), non-maximum suppression, and a
-   Haar-cascade number-plate detector.
-4. Hand-off: text regions and plates are cropped from the full-resolution photo
-   and sent to Gemini with the photo, so small or distant text is easier to read.
+3. Detection: contours and a connected-component letter check (regions need four
+   or more letter-sized blobs of similar height on one text line), plus the
+   PP-OCRv3 DB text detector (OpenCV DNN, 2.4 MB ONNX from the OpenCV model zoo,
+   downloaded on first use). Both sets of regions are painted on a mask and closed
+   into one block per sign; blocks the DB detector confirms rank first.
+4. Hand-off: each block is perspective-corrected from the full-resolution photo
+   (four-point transform from its DB quad or minimum-area rotated rectangle),
+   upscaled if small, contrast-enhanced with CLAHE on the L channel and
+   unsharp-masked (stronger for blurry photos), then sent to Gemini with the photo.
+5. Number plates: Indian plate numbers in the OCR text are mapped to their state
+   from the registration code (`plate_states` in the response).
+
+`uv run python -m src.eval_ocr` compares OCR with and without the crops on the
+labelled sample photos.
 
 Each stage image is returned under `cv.stages` and shown on `/maps`.
 

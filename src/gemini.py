@@ -61,7 +61,7 @@ class FinalPrediction(BaseModel):
 
 OCR_PROMPT = """Read the text in this photograph.
 
-The first image is the full photograph. Any further images are full-resolution crops of text regions and number plates found by a computer-vision detector; use them to read small text.
+The first image is the full photograph. Any further images are text regions found by OpenCV, cut from the full-resolution photo, rotated and perspective-corrected to face the camera, and contrast-enhanced; use them to read small or angled text.
 
 1. Transcribe all visible text into text, preserving the original wording, line breaks and scripts.
 2. List every language and writing script in the text.
@@ -73,7 +73,8 @@ The first image is the full photograph. Any further images are full-resolution c
 FUSION_PROMPT = """You are the final step of a photo geolocation pipeline. Combine the photograph with the outputs of the earlier stages below and give your best final location predictions.
 
 Stages:
-- cv: classical OpenCV analysis (sharpness, whether the image is blurry, number of text regions and number plates found).
+- cv: OpenCV analysis (sharpness, whether the image is blurry, text regions from morphology and a DB text detector).
+- plate_states: Indian number plates found in the OCR text, with the state their registration code belongs to. Checked against the official code list, so treat them as strong evidence.
 - ocr: text read from the photo, its languages, location clues, and an area guess.
 - geoclip: one coordinate from an image-to-GPS retrieval model, with its probability.
 - plonk: up to five candidate areas in India from a generative geolocation model. sample_share is the fraction of the model's samples in that area, not a calibrated probability. evidence_match means the area's name matched the OCR text.
@@ -84,7 +85,8 @@ Rules:
 3. If a place matches a PLONK or GeoCLIP candidate you may reuse its coordinates; otherwise give the coordinates of the place you name.
 4. The app targets India. If the evidence clearly shows the photo is outside India, say so in reasoning and predict the real location.
 5. confidence is your honest probability that the place is correct; the values need not sum to 1. Do not invent evidence.
-6. In reasoning, name the specific evidence used. In sources, list which of image, cv, ocr, geoclip, plonk support the place.
+6. If cv.blurry is true, the OCR text may contain misreadings: trust exact spellings less and lean more on the photo, scripts and model agreement.
+7. In reasoning, name the specific evidence used. In sources, list which of image, cv, ocr, geoclip, plonk support the place.
 
 Pipeline outputs (JSON):
 """
